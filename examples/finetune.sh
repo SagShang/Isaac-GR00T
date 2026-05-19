@@ -2,26 +2,30 @@
 
 set -x -euo pipefail
 
-NUM_GPUS="${NUM_GPUS:-1}"
+NUM_GPUS="${NUM_GPUS:-8}"
 MASTER_PORT="${MASTER_PORT:-29500}"
 SAVE_STEPS="${SAVE_STEPS:-1000}"
-MAX_STEPS="${MAX_STEPS:-10000}"
-USE_WANDB="${USE_WANDB:-1}"
+MAX_STEPS="${MAX_STEPS:-30000}"
+USE_WANDB="${USE_WANDB:-0}"
+FULL_FINETUNE="${FULL_FINETUNE:-1}"
 DATALOADER_NUM_WORKERS="${DATALOADER_NUM_WORKERS:-4}"
 GLOBAL_BATCH_SIZE="${GLOBAL_BATCH_SIZE:-32}"
 SHARD_SIZE="${SHARD_SIZE:-1024}"
 NUM_SHARDS_PER_EPOCH="${NUM_SHARDS_PER_EPOCH:-100000}"
 EPISODE_SAMPLING_RATE="${EPISODE_SAMPLING_RATE:-0.1}"
 
-BASE_MODEL_PATH=""
-DATASET_PATH=""
-MODALITY_CONFIG_PATH=""
-EMBODIMENT_TAG=""
-OUTPUT_DIR=""
+BASE_MODEL_PATH="/data/wentao/checkpoints/GR00T-N1.7-3B"
+DATASET_PATH="datasets/franka_pick_and_place_cube_lerobot"
+MODALITY_CONFIG_PATH="examples/FRANKA_PICK_CUBE/franka_pick_cube_config.py"
+EMBODIMENT_TAG="NEW_EMBODIMENT"
+OUTPUT_DIR="outputs/franka_pick_cube_finetune"
 EXPERIMENT_NAME=""
 WANDB_PROJECT=""
 STATE_DROPOUT_PROB=""
 EXTRA_ARGS=()
+
+export NCCL_P2P_DISABLE="${NCCL_P2P_DISABLE:-1}"
+export NCCL_IB_DISABLE="${NCCL_IB_DISABLE:-1}"
 
 usage() {
     cat <<'EOF'
@@ -32,6 +36,7 @@ Usage: bash examples/finetune.sh \
   --output-dir <path> \
   [--modality-config-path <path>] \
   [--state-dropout-prob <value>] \
+  [--full-finetune] \
   [--save-only-model] \
   [-- <extra launch_finetune.py args>...]
 EOF
@@ -70,6 +75,10 @@ while [ "$#" -gt 0 ]; do
         --state-dropout-prob)
             STATE_DROPOUT_PROB="$2"
             shift 2
+            ;;
+        --full-finetune)
+            FULL_FINETUNE=1
+            shift
             ;;
         --save-only-model)
             SAVE_ONLY_MODEL=1
@@ -139,6 +148,9 @@ fi
 
 if [ -n "$STATE_DROPOUT_PROB" ]; then
     LAUNCH_CMD+=(--state_dropout_prob "$STATE_DROPOUT_PROB")
+fi
+if [ "$FULL_FINETUNE" = "1" ]; then
+    LAUNCH_CMD+=(--tune-llm --tune-visual)
 fi
 if [ -n "${SAVE_ONLY_MODEL:-}" ]; then
     LAUNCH_CMD+=(--save_only_model)
